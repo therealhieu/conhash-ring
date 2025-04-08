@@ -164,39 +164,67 @@ pub struct ConsistentHashingRing<T: RingHasherTrait> {
 }
 
 nest! {
+    /// Represents the result of adding a physical node to the consistent hashing ring.
+    ///
+    /// This struct contains information about the virtual nodes created for the added physical node
+    /// and the number of keys reassigned to each virtual node.
     #[derive(Debug, Default, Builder)]*
     pub struct AddNodeResult {
-        pub values: Vec<pub  struct AddNodeResultValue {
+        /// A list of results for each virtual node created for the added physical node.
+        pub values: Vec<pub struct AddNodeResultValue {
+            /// The unique identifier of the virtual node.
             pub id: String,
+            /// The hash value of the virtual node.
             pub hash: u64,
+            /// The number of keys that were reassigned to this virtual node.
             pub keys_added: usize,
         }>,
     }
 }
 
 nest! {
+    /// Represents the result of adding a key-value pair to the consistent hashing ring.
+    ///
+    /// This struct contains information about the key, its hash value, and the locations
+    /// (virtual nodes and their corresponding physical nodes) where the key was added.
     #[derive(Debug, Builder)]*
     pub struct AddKeyResult {
+        /// The key that was added to the ring.
         pub key: String,
+        /// The hash value of the key.
         pub hash: u64,
+        /// The locations where the key was added, represented as a list of virtual node and physical node pairs.
         #[builder(default)]
         pub locations: Vec<pub struct AddKeyResultLocation {
+            /// The unique identifier of the virtual node.
             pub id: String,
+            /// The unique identifier of the physical node.
             pub pid: String,
-        }>
+        }>,
     }
 }
 
 nest! {
+    /// Represents information about hash ranges in the consistent hashing ring.
+    ///
+    /// This struct contains details about the ranges of hash values managed by the ring,
+    /// including the number of keys and the items stored within each range.
     #[derive(Debug, Builder)]*
     #[cfg_attr(test, derive(Serialize, Deserialize))]*
     pub struct RangeInfo {
+        /// A list of hash ranges managed by the ring.
         pub ranges: Vec<pub struct Range {
+            /// The starting hash value of the range.
             pub hash_start: u64,
+            /// The ending hash value of the range.
             pub hash_end: u64,
+            /// The number of keys within the range.
             pub count: usize,
+            /// The items stored within the range.
             pub items: Vec<pub struct HashItem {
+                /// The hash value of the item.
                 pub hash: u64,
+                /// The actual item stored in the range.
                 pub inner: Item,
             }>,
         }>,
@@ -343,28 +371,47 @@ impl<T: RingHasherTrait> ConsistentHashingRing<T> {
         Ok(result)
     }
 
+    /// Removes a physical node from the consistent hashing ring.
+    ///
+    /// This method removes all virtual nodes associated with the given physical node ID (`pid`).
+    /// It redistributes the data stored in the virtual nodes of the removed physical node to the
+    /// next virtual nodes in the ring that belong to different physical nodes.
+    ///
+    /// # Steps
+    /// 1. Check if the `physicals` map is empty. If so, clear all mappings and return early.
+    /// 2. Retrieve the virtual node IDs (`vids`) associated with the physical node.
+    /// 3. Remove each virtual node using the `remove_vnode` method.
+    /// 4. Remove the physical node from the `physicals` map.
+    ///
+    /// # Arguments
+    /// - `pid`: The unique identifier of the physical node to be removed.
+    ///
+    /// # Returns
+    /// - `Result<()>`: Returns `Ok(())` if the physical node is successfully removed, or an error
+    ///   if the physical node does not exist or if any operation fails.
     pub fn remove_physical_node(&mut self, pid: &str) -> Result<()> {
-        // Move the data from each vnode to next vnode which belongs to different physical node
-
+        // If there are no physical nodes, clear all mappings and return early.
         if self.physicals.is_empty() {
-            self.hash_to_vid.clear();
-            self.vid_to_pid.clear();
-
+            self.hash_to_vid.clear(); // Clear the hash-to-virtual-node mapping.
+            self.vid_to_pid.clear(); // Clear the virtual-node-to-physical-node mapping.
             return Ok(());
         }
 
+        // Retrieve the virtual node IDs (`vids`) associated with the physical node.
         let vids = {
             let pnode = self
                 .physicals
                 .get(pid)
-                .ok_or_else(|| anyhow!("Physical node not found, pid: {}", pid))?
+                .ok_or_else(|| anyhow!("Physical node not found, pid: {}", pid))? // Error if the physical node does not exist.
                 .clone();
-            let keys = pnode.borrow().vnodes.keys().cloned().collect::<Vec<_>>();
-
+            let keys = pnode.borrow().vnodes.keys().cloned().collect::<Vec<_>>(); // Collect virtual node IDs.
             keys
         };
 
+        // Remove each virtual node using the `remove_vnode` method.
         vids.iter().try_for_each(|vid| self.remove_vnode(vid))?;
+
+        // Remove the physical node from the `physicals` map.
         self.physicals.remove(pid);
 
         Ok(())
@@ -466,14 +513,34 @@ impl<T: RingHasherTrait> ConsistentHashingRing<T> {
         Ok(result)
     }
 
+    /// Inserts multiple key-value pairs into the consistent hashing ring.
+    ///
+    /// This method iterates over a list of items, computes their hashes, and inserts
+    /// each key-value pair into the appropriate virtual nodes in the ring.
+    ///
+    /// # Steps
+    /// 1. Iterate over the list of items.
+    /// 2. For each item, call the `insert` method to add the key-value pair to the ring.
+    /// 3. Collect the results of each insertion into a vector.
+    ///
+    /// # Arguments
+    /// - `items`: A slice of `Item` structs, each containing a key and value to be inserted.
+    ///
+    /// # Returns
+    /// - `Result<Vec<AddKeyResult>>`: A vector of results for each inserted item, or an error
+    ///   if any insertion fails.
     pub fn insert_many(&mut self, items: &[Item]) -> Result<Vec<AddKeyResult>> {
+        // Initialize a vector to store the results of each insertion.
         let mut results = Vec::new();
 
+        // Iterate over each item and insert it into the ring.
         for item in items {
+            // Insert the key-value pair into the ring and collect the result.
             let result = self.insert(&item.key, &item.value)?;
             results.push(result);
         }
 
+        // Return the results of all insertions.
         Ok(results)
     }
 
