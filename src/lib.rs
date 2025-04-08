@@ -164,39 +164,67 @@ pub struct ConsistentHashingRing<T: RingHasherTrait> {
 }
 
 nest! {
+    /// Represents the result of adding a physical node to the consistent hashing ring.
+    ///
+    /// This struct contains information about the virtual nodes created for the added physical node
+    /// and the number of keys reassigned to each virtual node.
     #[derive(Debug, Default, Builder)]*
     pub struct AddNodeResult {
-        pub values: Vec<pub  struct AddNodeResultValue {
+        /// A list of results for each virtual node created for the added physical node.
+        pub values: Vec<pub struct AddNodeResultValue {
+            /// The unique identifier of the virtual node.
             pub id: String,
+            /// The hash value of the virtual node.
             pub hash: u64,
+            /// The number of keys that were reassigned to this virtual node.
             pub keys_added: usize,
         }>,
     }
 }
 
 nest! {
+    /// Represents the result of adding a key-value pair to the consistent hashing ring.
+    ///
+    /// This struct contains information about the key, its hash value, and the locations
+    /// (virtual nodes and their corresponding physical nodes) where the key was added.
     #[derive(Debug, Builder)]*
     pub struct AddKeyResult {
+        /// The key that was added to the ring.
         pub key: String,
+        /// The hash value of the key.
         pub hash: u64,
+        /// The locations where the key was added, represented as a list of virtual node and physical node pairs.
         #[builder(default)]
         pub locations: Vec<pub struct AddKeyResultLocation {
+            /// The unique identifier of the virtual node.
             pub id: String,
+            /// The unique identifier of the physical node.
             pub pid: String,
-        }>
+        }>,
     }
 }
 
 nest! {
+    /// Represents information about hash ranges in the consistent hashing ring.
+    ///
+    /// This struct contains details about the ranges of hash values managed by the ring,
+    /// including the number of keys and the items stored within each range.
     #[derive(Debug, Builder)]*
     #[cfg_attr(test, derive(Serialize, Deserialize))]*
     pub struct RangeInfo {
+        /// A list of hash ranges managed by the ring.
         pub ranges: Vec<pub struct Range {
+            /// The starting hash value of the range.
             pub hash_start: u64,
+            /// The ending hash value of the range.
             pub hash_end: u64,
+            /// The number of keys within the range.
             pub count: usize,
+            /// The items stored within the range.
             pub items: Vec<pub struct HashItem {
+                /// The hash value of the item.
                 pub hash: u64,
+                /// The actual item stored in the range.
                 pub inner: Item,
             }>,
         }>,
@@ -343,28 +371,47 @@ impl<T: RingHasherTrait> ConsistentHashingRing<T> {
         Ok(result)
     }
 
+    /// Removes a physical node from the consistent hashing ring.
+    ///
+    /// This method removes all virtual nodes associated with the given physical node ID (`pid`).
+    /// It redistributes the data stored in the virtual nodes of the removed physical node to the
+    /// next virtual nodes in the ring that belong to different physical nodes.
+    ///
+    /// # Steps
+    /// 1. Check if the `physicals` map is empty. If so, clear all mappings and return early.
+    /// 2. Retrieve the virtual node IDs (`vids`) associated with the physical node.
+    /// 3. Remove each virtual node using the `remove_vnode` method.
+    /// 4. Remove the physical node from the `physicals` map.
+    ///
+    /// # Arguments
+    /// - `pid`: The unique identifier of the physical node to be removed.
+    ///
+    /// # Returns
+    /// - `Result<()>`: Returns `Ok(())` if the physical node is successfully removed, or an error
+    ///   if the physical node does not exist or if any operation fails.
     pub fn remove_physical_node(&mut self, pid: &str) -> Result<()> {
-        // Move the data from each vnode to next vnode which belongs to different physical node
-
+        // If there are no physical nodes, clear all mappings and return early.
         if self.physicals.is_empty() {
-            self.hash_to_vid.clear();
-            self.vid_to_pid.clear();
-
+            self.hash_to_vid.clear(); // Clear the hash-to-virtual-node mapping.
+            self.vid_to_pid.clear(); // Clear the virtual-node-to-physical-node mapping.
             return Ok(());
         }
 
+        // Retrieve the virtual node IDs (`vids`) associated with the physical node.
         let vids = {
             let pnode = self
                 .physicals
                 .get(pid)
-                .ok_or_else(|| anyhow!("Physical node not found, pid: {}", pid))?
+                .ok_or_else(|| anyhow!("Physical node not found, pid: {}", pid))? // Error if the physical node does not exist.
                 .clone();
-            let keys = pnode.borrow().vnodes.keys().cloned().collect::<Vec<_>>();
-
+            let keys = pnode.borrow().vnodes.keys().cloned().collect::<Vec<_>>(); // Collect virtual node IDs.
             keys
         };
 
+        // Remove each virtual node using the `remove_vnode` method.
         vids.iter().try_for_each(|vid| self.remove_vnode(vid))?;
+
+        // Remove the physical node from the `physicals` map.
         self.physicals.remove(pid);
 
         Ok(())
@@ -466,14 +513,34 @@ impl<T: RingHasherTrait> ConsistentHashingRing<T> {
         Ok(result)
     }
 
+    /// Inserts multiple key-value pairs into the consistent hashing ring.
+    ///
+    /// This method iterates over a list of items, computes their hashes, and inserts
+    /// each key-value pair into the appropriate virtual nodes in the ring.
+    ///
+    /// # Steps
+    /// 1. Iterate over the list of items.
+    /// 2. For each item, call the `insert` method to add the key-value pair to the ring.
+    /// 3. Collect the results of each insertion into a vector.
+    ///
+    /// # Arguments
+    /// - `items`: A slice of `Item` structs, each containing a key and value to be inserted.
+    ///
+    /// # Returns
+    /// - `Result<Vec<AddKeyResult>>`: A vector of results for each inserted item, or an error
+    ///   if any insertion fails.
     pub fn insert_many(&mut self, items: &[Item]) -> Result<Vec<AddKeyResult>> {
+        // Initialize a vector to store the results of each insertion.
         let mut results = Vec::new();
 
+        // Iterate over each item and insert it into the ring.
         for item in items {
+            // Insert the key-value pair into the ring and collect the result.
             let result = self.insert(&item.key, &item.value)?;
             results.push(result);
         }
 
+        // Return the results of all insertions.
         Ok(results)
     }
 
@@ -518,6 +585,90 @@ impl<T: RingHasherTrait> ConsistentHashingRing<T> {
 
         // Return an error if the key is not found.
         bail!("Item not found for key: {}", key)
+    }
+
+    /// Removes a key-value pair from the consistent hashing ring.
+    ///
+    /// This method computes the hash of the given key, iterates over the virtual nodes
+    /// in both clockwise and anti-clockwise directions, and removes the key-value pair
+    /// from the appropriate physical nodes. The removal stops once the replication factor
+    /// is satisfied.
+    ///
+    /// # Steps
+    /// 1. Compute the hash of the key using the hasher.
+    /// 2. Iterate over the virtual nodes in both clockwise and anti-clockwise directions.
+    /// 3. For each virtual node:
+    ///    - Check if the key exists in the virtual node's hash set.
+    ///    - Remove the key-value pair from the physical node's data map.
+    ///    - Track the number of successful removals.
+    /// 4. Stop once the replication factor is satisfied.
+    /// 5. Return an error if the key is not found or if the replication factor is not met.
+    ///
+    /// # Arguments
+    /// - `key`: The key to be removed from the ring.
+    ///
+    /// # Returns
+    /// - `Result<()>`: Returns `Ok(())` if the key is successfully removed, or an error
+    ///   if the key does not exist or if the replication factor is not met.
+    pub fn remove(&mut self, key: &str) -> Result<()> {
+        // Compute the hash of the key.
+        let hash = self.hasher.digest(key)?;
+        let mut remove_count = 0;
+
+        // Define iterators for clockwise and anti-clockwise traversal of the ring.
+        let ring_iters = [
+            self.hash_to_vid
+                .range(hash..) // Clockwise: Start from the hash and wrap around.
+                .chain(self.hash_to_vid.range(..)),
+            self.hash_to_vid
+                .range(..hash) // Anti-clockwise: Start before the hash and wrap around.
+                .chain(self.hash_to_vid.range(hash..)),
+        ];
+
+        // Iterate over both clockwise and anti-clockwise directions.
+        for it in ring_iters {
+            for (_, vid) in it {
+                // Retrieve the physical node associated with the virtual node.
+                let pnode = self.vid_to_physical(vid)?;
+                let mut pnode_refmut = pnode.borrow_mut();
+
+                // Retrieve the virtual node from the physical node.
+                let vnode = pnode_refmut
+                    .vnodes
+                    .get_mut(vid)
+                    .ok_or_else(|| anyhow!("Virtual node not found, vid: {}", vid))?;
+
+                // Check if the key exists in the virtual node's hash set.
+                let removed = vnode.hashes.remove(&hash);
+
+                if removed {
+                    // Remove the key-value pair from the physical node's data map.
+                    if pnode_refmut.data.remove(&hash).is_some() {
+                        remove_count += 1;
+                    }
+
+                    // Stop once the replication factor is satisfied.
+                    if remove_count == self.replication_factor {
+                        return Ok(());
+                    }
+                } else {
+                    // If a replica wasn't found, stop checking further in this direction.
+                    break;
+                }
+            }
+        }
+
+        // If no replicas were removed, return an error indicating the key was not found.
+        if remove_count == 0 {
+            bail!("Item not found for key: {}", key);
+        }
+
+        // If the replication factor is not met, return an error.
+        bail!(
+            "Remove count {} is less than replication factor {}",
+            remove_count,
+            self.replication_factor
+        )
     }
 
     /// Retrieves the physical node IDs (`pids`) that contain a specific key.
@@ -1183,6 +1334,129 @@ mod tests {
               ]
             })
         );
+    }
+
+    #[test]
+    fn should_successfully_remove_key() {
+        let mut ring = ring();
+        let nodes = nodes();
+
+        for node in nodes {
+            ring.add_physical_node(node).unwrap();
+        }
+
+        let items = items();
+        ring.insert_many(&items).unwrap();
+
+        ring.remove("key1").unwrap();
+        assert_eq!(ring.key_count().unwrap(), 8);
+
+        let range_info = ring.range_info().unwrap();
+        assert_eq!(range_info.key_count(), 8);
+        assert_eq!(
+            range_info.to_json(),
+            json!({
+                "ranges": [
+                  {
+                    "hash_start": 10,
+                    "hash_end": 20,
+                    "count": 3,
+                    "items": [
+                      {
+                        "hash": 6,
+                        "inner": {
+                          "key": "key2",
+                          "value": "value2"
+                        }
+                      },
+                      {
+                        "hash": 15,
+                        "inner": {
+                          "key": "key3",
+                          "value": "value3"
+                        }
+                      },
+                      {
+                        "hash": 65,
+                        "inner": {
+                          "key": "key5",
+                          "value": "value5"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "hash_start": 20,
+                    "hash_end": 30,
+                    "count": 2,
+                    "items": [
+                      {
+                        "hash": 15,
+                        "inner": {
+                          "key": "key3",
+                          "value": "value3"
+                        }
+                      },
+                      {
+                        "hash": 25,
+                        "inner": {
+                          "key": "key4",
+                          "value": "value4"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "hash_start": 30,
+                    "hash_end": 40,
+                    "count": 1,
+                    "items": [
+                      {
+                        "hash": 25,
+                        "inner": {
+                          "key": "key4",
+                          "value": "value4"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "hash_start": 40,
+                    "hash_end": 50,
+                    "count": 0,
+                    "items": []
+                  },
+                  {
+                    "hash_start": 50,
+                    "hash_end": 60,
+                    "count": 0,
+                    "items": []
+                  },
+                  {
+                    "hash_start": 60,
+                    "hash_end": 10,
+                    "count": 2,
+                    "items": [
+                      {
+                        "hash": 6,
+                        "inner": {
+                          "key": "key2",
+                          "value": "value2"
+                        }
+                      },
+                      {
+                        "hash": 65,
+                        "inner": {
+                          "key": "key5",
+                          "value": "value5"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            )
+        )
     }
 
     #[test]
