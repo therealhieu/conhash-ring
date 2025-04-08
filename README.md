@@ -36,6 +36,7 @@ Criteria is to maintain the replication factor `r`.
 - **Removing a virtual node**: When a node is removed, keys are redistributed anti-clockwise to the nearest virtual node belonging to a physical node that does not already store the key.
 
 ### 1. Add keys
+
 <div style="display: flex; justify-content: space-between;">
   <img src="https://github.com/therealhieu/conhash-ring/raw/master/images/init1.png" alt="initial state" width="48%" />
   <img src="https://github.com/therealhieu/conhash-ring/raw/master/images/add_keys.png" alt="initial state" width="48%" />
