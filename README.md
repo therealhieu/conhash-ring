@@ -1,6 +1,9 @@
 # conhash-ring: Rust implementation of Consistent Hashing
 ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/therealhieu/conhash-ring/CI)
 [![codecov](https://codecov.io/gh/therealhieu/conhash-ring/graph/badge.svg?token=IUM6TUHHY1)](https://codecov.io/gh/therealhieu/conhash-ring)
+![docs.rs](https://img.shields.io/docsrs/conhash-ring)
+![Crates.io Version](https://img.shields.io/crates/v/conhash-ring)
+
 
 ## Overview
 This is a Rust implementation of consistent hashing, a technique used in distributed systems to distribute data across multiple nodes in a way that minimizes the amount of data that needs to be moved when nodes are added or removed.
@@ -13,24 +16,37 @@ This implementation serves as an educational example to demonstrate the concept 
 - Support replication factor: Each key can be stored on multiple physical nodes to improve fault tolerance.
 
 ## APIs
+Checkout [ConsistentHashingRing](https://docs.rs/conhash-ring/latest/conhash_ring/struct.ConsistentHashingRing.html) for more details.
 
 ## Test case examples
+Checkout test cases in `src/lib.rs` for more details.
+
 ### 1. Add keys
-![initial state](images/init1.png)
-![add keys](images/add_keys.png)
+<div style="display: flex; justify-content: space-between;">
+  <img src="images/init1.png" alt="initial state" width="48%" />
+  <img src="images/add_keys.png" alt="add keys" width="48%" />
+</div>
 
 ### 2. Removing node 2 (with 2 vnodes)
-![init2](images/init2.png)
-![remove node 2](images/remove_node2.png)
+<div style="display: flex; justify-content: space-between;">
+  <img src="images/init2.png" alt="initial state" width="48%" />
+  <img src="images/remove_node2.png" alt="remove node 2" width="48%" />
+</div>
 
 ### 3. Adding 1 vnode (hash = 70) to node 1
-![init2](images/init2.png)
-![add 1 vnode](images/add_1_vnode.png)
+<div style="display: flex; justify-content: space-between;">
+  <img src="images/init2.png" alt="initial state" width="48%" />
+  <img src="images/add_1_vnode.png" alt="add 1 vnode" width="48%" />
+</div>
 
 ### 4. Reducing node 3 vnodes to 1
-![init2](images/init2.png)
-![reduce node 3 vnodes](images/reduce_vnodes.png)
+<div style="display: flex; justify-content: space-between;">
+  <img src="images/init2.png" alt="initial state" width="48%" />
+  <img src="images/reduce_vnodes.png" alt="reduce node 3 vnodes" width="48%" />
+</div>
 
 ### 5. Increasing node 1 vnodes to 3
-![init2](images/init2.png)
-![increase vnodes](images/increase_vnodes.png)
+<div style="display: flex; justify-content: space-between;">
+  <img src="images/init2.png" alt="initial state" width="48%" />
+  <img src="images/increase_vnodes.png" alt="increase node 1 vnodes" width="48%" />
+</div>
