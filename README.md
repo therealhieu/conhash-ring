@@ -6,13 +6,11 @@
 ![Crates.io Version](https://img.shields.io/crates/v/conhash-ring)
 
 ## Overview
-
 This is a Rust implementation of consistent hashing, a technique used in distributed systems to distribute data across multiple nodes in a way that minimizes the amount of data that needs to be moved when nodes are added or removed.
 
 This implementation serves as an educational example to demonstrate the concept of a consistent hash ring. It is not designed for production environments.
 
 ## Features
-
 - Support pluggable hash functions.
 - Support virtual nodes: Each physical node can be represented by multiple virtual nodes to improve load balancing. Physical nodes contain real data, while virtual nodes contain key hashes.
 - Support replication factor: Each key can be stored on multiple physical nodes to improve fault tolerance.
@@ -20,10 +18,7 @@ This implementation serves as an educational example to demonstrate the concept 
 ## APIs
 Checkout [ConsistentHashingRing](https://docs.rs/conhash-ring/latest/conhash_ring/struct.ConsistentHashingRing.html) for more details.
 
-Checkout [ConsistentHashingRing](https://docs.rs/conhash-ring/latest/conhash_ring/struct.ConsistentHashingRing.html) for more details.
-
 ## Test case examples
-
 Checkout test cases in `src/lib.rs` for more details.
 Criteria is to maintain the replication factor `r`.
 
@@ -36,7 +31,6 @@ Criteria is to maintain the replication factor `r`.
 - **Removing a virtual node**: When a node is removed, keys are redistributed anti-clockwise to the nearest virtual node belonging to a physical node that does not already store the key.
 
 ### 1. Add keys
-
 <div style="display: flex; justify-content: space-between;">
   <img src="https://github.com/therealhieu/conhash-ring/raw/master/images/init1.png" alt="initial state" width="48%" />
   <img src="https://github.com/therealhieu/conhash-ring/raw/master/images/add_keys.png" alt="initial state" width="48%" />
