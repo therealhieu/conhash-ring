@@ -587,6 +587,90 @@ impl<T: RingHasherTrait> ConsistentHashingRing<T> {
         bail!("Item not found for key: {}", key)
     }
 
+    /// Removes a key-value pair from the consistent hashing ring.
+    ///
+    /// This method computes the hash of the given key, iterates over the virtual nodes
+    /// in both clockwise and anti-clockwise directions, and removes the key-value pair
+    /// from the appropriate physical nodes. The removal stops once the replication factor
+    /// is satisfied.
+    ///
+    /// # Steps
+    /// 1. Compute the hash of the key using the hasher.
+    /// 2. Iterate over the virtual nodes in both clockwise and anti-clockwise directions.
+    /// 3. For each virtual node:
+    ///    - Check if the key exists in the virtual node's hash set.
+    ///    - Remove the key-value pair from the physical node's data map.
+    ///    - Track the number of successful removals.
+    /// 4. Stop once the replication factor is satisfied.
+    /// 5. Return an error if the key is not found or if the replication factor is not met.
+    ///
+    /// # Arguments
+    /// - `key`: The key to be removed from the ring.
+    ///
+    /// # Returns
+    /// - `Result<()>`: Returns `Ok(())` if the key is successfully removed, or an error
+    ///   if the key does not exist or if the replication factor is not met.
+    pub fn remove(&mut self, key: &str) -> Result<()> {
+        // Compute the hash of the key.
+        let hash = self.hasher.digest(key)?;
+        let mut remove_count = 0;
+
+        // Define iterators for clockwise and anti-clockwise traversal of the ring.
+        let ring_iters = [
+            self.hash_to_vid
+                .range(hash..) // Clockwise: Start from the hash and wrap around.
+                .chain(self.hash_to_vid.range(..)),
+            self.hash_to_vid
+                .range(..hash) // Anti-clockwise: Start before the hash and wrap around.
+                .chain(self.hash_to_vid.range(hash..)),
+        ];
+
+        // Iterate over both clockwise and anti-clockwise directions.
+        for it in ring_iters {
+            for (_, vid) in it {
+                // Retrieve the physical node associated with the virtual node.
+                let pnode = self.vid_to_physical(vid)?;
+                let mut pnode_refmut = pnode.borrow_mut();
+
+                // Retrieve the virtual node from the physical node.
+                let vnode = pnode_refmut
+                    .vnodes
+                    .get_mut(vid)
+                    .ok_or_else(|| anyhow!("Virtual node not found, vid: {}", vid))?;
+
+                // Check if the key exists in the virtual node's hash set.
+                let removed = vnode.hashes.remove(&hash);
+
+                if removed {
+                    // Remove the key-value pair from the physical node's data map.
+                    if pnode_refmut.data.remove(&hash).is_some() {
+                        remove_count += 1;
+                    }
+
+                    // Stop once the replication factor is satisfied.
+                    if remove_count == self.replication_factor {
+                        return Ok(());
+                    }
+                } else {
+                    // If a replica wasn't found, stop checking further in this direction.
+                    break;
+                }
+            }
+        }
+
+        // If no replicas were removed, return an error indicating the key was not found.
+        if remove_count == 0 {
+            bail!("Item not found for key: {}", key);
+        }
+
+        // If the replication factor is not met, return an error.
+        bail!(
+            "Remove count {} is less than replication factor {}",
+            remove_count,
+            self.replication_factor
+        )
+    }
+
     /// Retrieves the physical node IDs (`pids`) that contain a specific key.
     ///
     /// This method computes the hash of the given key, determines the virtual nodes
@@ -1250,6 +1334,129 @@ mod tests {
               ]
             })
         );
+    }
+
+    #[test]
+    fn should_successfully_remove_key() {
+        let mut ring = ring();
+        let nodes = nodes();
+
+        for node in nodes {
+            ring.add_physical_node(node).unwrap();
+        }
+
+        let items = items();
+        ring.insert_many(&items).unwrap();
+
+        ring.remove("key1").unwrap();
+        assert_eq!(ring.key_count().unwrap(), 8);
+
+        let range_info = ring.range_info().unwrap();
+        assert_eq!(range_info.key_count(), 8);
+        assert_eq!(
+            range_info.to_json(),
+            json!({
+                "ranges": [
+                  {
+                    "hash_start": 10,
+                    "hash_end": 20,
+                    "count": 3,
+                    "items": [
+                      {
+                        "hash": 6,
+                        "inner": {
+                          "key": "key2",
+                          "value": "value2"
+                        }
+                      },
+                      {
+                        "hash": 15,
+                        "inner": {
+                          "key": "key3",
+                          "value": "value3"
+                        }
+                      },
+                      {
+                        "hash": 65,
+                        "inner": {
+                          "key": "key5",
+                          "value": "value5"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "hash_start": 20,
+                    "hash_end": 30,
+                    "count": 2,
+                    "items": [
+                      {
+                        "hash": 15,
+                        "inner": {
+                          "key": "key3",
+                          "value": "value3"
+                        }
+                      },
+                      {
+                        "hash": 25,
+                        "inner": {
+                          "key": "key4",
+                          "value": "value4"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "hash_start": 30,
+                    "hash_end": 40,
+                    "count": 1,
+                    "items": [
+                      {
+                        "hash": 25,
+                        "inner": {
+                          "key": "key4",
+                          "value": "value4"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "hash_start": 40,
+                    "hash_end": 50,
+                    "count": 0,
+                    "items": []
+                  },
+                  {
+                    "hash_start": 50,
+                    "hash_end": 60,
+                    "count": 0,
+                    "items": []
+                  },
+                  {
+                    "hash_start": 60,
+                    "hash_end": 10,
+                    "count": 2,
+                    "items": [
+                      {
+                        "hash": 6,
+                        "inner": {
+                          "key": "key2",
+                          "value": "value2"
+                        }
+                      },
+                      {
+                        "hash": 65,
+                        "inner": {
+                          "key": "key5",
+                          "value": "value5"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            )
+        )
     }
 
     #[test]
