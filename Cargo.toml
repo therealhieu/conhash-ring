@@ -2,6 +2,11 @@
 name = "conhash-ring"
 version = "0.1.0"
 edition = "2021"
+authors = ["Hieu Minh Nguyen <hieunguyenvn98@gmail.com>"]
+description = "A consistent hashing ring implementation in Rust"
+license = "Apache-2.0"
+keywords = ["consistent hashing", "hash ring", "distributed systems"]
+
 
 [dependencies]
 anyhow = { version = "1.0.97", features = ["backtrace"] }
