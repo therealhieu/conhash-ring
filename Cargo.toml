@@ -1,0 +1,22 @@
+[package]
+name = "conhash-ring"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { version = "1.0.97", features = ["backtrace"] }
+bon = "3.5.1"
+digest = "0.10.7"
+md-5 = { version = "0.10.6", optional = true }
+nestify = "0.3.3"
+ordermap = "0.5.7"
+
+[features]
+md5 = ["md-5"]
+default = ["md5"]
+
+[dev-dependencies]
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = { version = "1.0.140", features = ["preserve_order"] }
+sugars = "3.0.1"
+
